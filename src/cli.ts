@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { Command } from 'commander';
 import { frameCommand } from './commands/frame.js';
 import { captureCommand } from './commands/capture.js';
