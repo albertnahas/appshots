@@ -22,6 +22,9 @@ interface FrameCommandOptions {
   config?: string;
   shadow?: boolean;
   deviceFrame?: boolean;
+  frameColor?: string;
+  pattern?: string;
+  patternOpacity?: string;
 }
 
 export async function frameCommand(
@@ -56,6 +59,9 @@ export async function frameCommand(
     ...(opts.borderRadius && { borderRadius: parseFloat(opts.borderRadius) }),
     ...(opts.shadow !== undefined && { shadow: opts.shadow }),
     ...(opts.deviceFrame !== undefined && { deviceFrame: opts.deviceFrame }),
+    ...(opts.frameColor && { frameColor: opts.frameColor }),
+    ...(opts.pattern && { pattern: opts.pattern }),
+    ...(opts.patternOpacity && { patternOpacity: parseFloat(opts.patternOpacity) }),
   };
 
   // Get per-screen titles from config

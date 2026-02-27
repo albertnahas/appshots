@@ -27,6 +27,9 @@ program
   .option('--landscape', 'landscape orientation')
   .option('--no-shadow', 'disable drop shadow')
   .option('--no-device-frame', 'disable device frame bezel')
+  .option('--frame-color <color>', 'device frame color (black, silver, gold, blue, red, white, or hex)')
+  .option('--pattern <name>', 'background pattern (dots, grid, diagonal, waves, diamonds, cross-dots)')
+  .option('--pattern-opacity <ratio>', 'pattern opacity (0-1)')
   .option('-c, --config <path>', 'config file path')
   .action(frameCommand);
 

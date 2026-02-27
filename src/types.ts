@@ -40,10 +40,14 @@ export const frameOptionsSchema = z.object({
   borderRadius: z.number().min(0).max(0.2).default(0.04),
   titleColor: z.string().default('#ffffff'),
   subtitleColor: z.string().default('rgba(255,255,255,0.7)'),
-  titleSize: z.number().min(0).max(0.2).default(0.05),
-  subtitleSize: z.number().min(0).max(0.1).default(0.028),
+  titleSize: z.number().min(0).max(0.2).default(0.065),
+  subtitleSize: z.number().min(0).max(0.1).default(0.034),
   shadow: z.boolean().default(true),
   deviceFrame: z.boolean().default(true),
+  frameColor: z.string().default('black'),
+  pattern: z.string().optional(),
+  patternOpacity: z.number().min(0).max(1).default(0.1),
+  patternColor: z.string().default('#ffffff'),
 });
 
 export type FrameOptions = z.infer<typeof frameOptionsSchema>;

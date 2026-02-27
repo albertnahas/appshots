@@ -20,17 +20,16 @@ interface FrameInput {
 // ─── Device frame configuration ────────────────────────────
 
 interface DeviceFrameConfig {
-  bezelX: number; // side bezel as ratio of device width
-  bezelTop: number; // top bezel as ratio of device height
-  bezelBottom: number; // bottom bezel as ratio of device height
-  bodyRadius: number; // device corner radius as ratio of width
-  screenRadius: number; // screen corner radius as ratio of width
+  bezelX: number;
+  bezelTop: number;
+  bezelBottom: number;
+  bodyRadius: number;
+  screenRadius: number;
   dynamicIsland: boolean;
   homeButton: boolean;
 }
 
 function getFrameConfig(spec: DeviceSpec): DeviceFrameConfig {
-  // Modern iPhones (Dynamic Island)
   if (spec.platform === 'ios' && spec.category === 'phone') {
     const isOlder = spec.slug === 'iphone-5.5' || spec.slug === 'iphone-4.7';
     if (isOlder) {
@@ -55,7 +54,6 @@ function getFrameConfig(spec: DeviceSpec): DeviceFrameConfig {
     };
   }
 
-  // iPads
   if (spec.platform === 'ios' && spec.category === 'tablet') {
     return {
       bezelX: 0.025,
@@ -68,7 +66,6 @@ function getFrameConfig(spec: DeviceSpec): DeviceFrameConfig {
     };
   }
 
-  // Android phones
   if (spec.platform === 'android' && spec.category === 'phone') {
     return {
       bezelX: 0.028,
@@ -81,7 +78,6 @@ function getFrameConfig(spec: DeviceSpec): DeviceFrameConfig {
     };
   }
 
-  // Android tablets
   if (spec.platform === 'android' && spec.category === 'tablet') {
     return {
       bezelX: 0.025,
@@ -94,7 +90,6 @@ function getFrameConfig(spec: DeviceSpec): DeviceFrameConfig {
     };
   }
 
-  // Default (desktop, watch, tv, etc.) — no device frame
   return {
     bezelX: 0.03,
     bezelTop: 0.025,
@@ -104,6 +99,55 @@ function getFrameConfig(spec: DeviceSpec): DeviceFrameConfig {
     dynamicIsland: false,
     homeButton: false,
   };
+}
+
+// ─── Frame color presets ───────────────────────────────────
+
+const FRAME_COLORS: Record<string, [string, string, string]> = {
+  black: ['#3A3A3A', '#1F1F1F', '#0D0D0D'],
+  silver: ['#D4D4D8', '#A1A1AA', '#71717A'],
+  gold: ['#D4A574', '#B8860B', '#7A5C1F'],
+  blue: ['#4A6FA5', '#2C4A7C', '#1A2F4F'],
+  red: ['#B04040', '#8B2020', '#5C1010'],
+  white: ['#F5F5F5', '#E0E0E0', '#C8C8C8'],
+};
+
+function resolveFrameColors(frameColor: string): [string, string, string] {
+  if (FRAME_COLORS[frameColor]) return FRAME_COLORS[frameColor];
+  // Treat as hex — derive gradient from single color
+  const base = frameColor;
+  return [lighten(base, 30), base, darken(base, 20)];
+}
+
+function lighten(hex: string, pct: number): string {
+  const [r, g, b] = parseHex(hex);
+  return toHex(
+    Math.min(255, r + Math.round((255 - r) * pct / 100)),
+    Math.min(255, g + Math.round((255 - g) * pct / 100)),
+    Math.min(255, b + Math.round((255 - b) * pct / 100)),
+  );
+}
+
+function darken(hex: string, pct: number): string {
+  const [r, g, b] = parseHex(hex);
+  return toHex(
+    Math.max(0, Math.round(r * (1 - pct / 100))),
+    Math.max(0, Math.round(g * (1 - pct / 100))),
+    Math.max(0, Math.round(b * (1 - pct / 100))),
+  );
+}
+
+function parseHex(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+function toHex(r: number, g: number, b: number): string {
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
 }
 
 // ─── Main export ───────────────────────────────────────────
@@ -118,10 +162,9 @@ export async function frameScreenshot(params: FrameInput): Promise<Buffer> {
   const canvasW = orientation === 'portrait' ? spec.width : spec.height;
   const canvasH = orientation === 'portrait' ? spec.height : spec.width;
 
-  // Plain resize: no styling, just make exact dimensions
   const hasOverlay = !!(title || subtitle);
   const isPlainResize =
-    !hasOverlay && opts.background === '#000000' && !opts.shadow && !opts.deviceFrame;
+    !hasOverlay && opts.background === '#000000' && !opts.shadow && !opts.deviceFrame && !opts.pattern;
 
   if (isPlainResize) {
     return sharp(input)
@@ -130,30 +173,31 @@ export async function frameScreenshot(params: FrameInput): Promise<Buffer> {
       .toBuffer();
   }
 
-  // Layout calculations
+  // Layout calculations — text sizing based on font size
   const padX = Math.round(canvasW * opts.padding);
   const padY = Math.round(canvasH * opts.padding * 0.6);
-  const titleH = title ? Math.round(canvasH * opts.titleSize * 2.5) : 0;
-  const subtitleH = subtitle ? Math.round(canvasH * opts.subtitleSize * 2.2) : 0;
+  const titleFontSize = Math.round(canvasW * opts.titleSize);
+  const subtitleFontSize = Math.round(canvasW * opts.subtitleSize);
+  const titleH = title ? Math.round(titleFontSize * 2) : 0;
+  const subtitleH = subtitle ? Math.round(subtitleFontSize * 2.4) : 0;
   const textH = titleH + subtitleH;
   const topOffset = padY + textH;
   const areaW = canvasW - padX * 2;
   const areaH = canvasH - topOffset - padY;
 
-  // Device frame for phones and tablets
   const showFrame =
     opts.deviceFrame && (spec.category === 'phone' || spec.category === 'tablet');
 
   if (showFrame) {
     return frameWithDevice(
       input, spec, opts, canvasW, canvasH, areaW, areaH, padX, topOffset, padY,
-      title, subtitle, titleH, subtitleH, hasOverlay,
+      title, subtitle, titleH, subtitleH, titleFontSize, subtitleFontSize, hasOverlay,
     );
   }
 
   return frameWithoutDevice(
     input, opts, canvasW, canvasH, areaW, areaH, padX, topOffset, padY,
-    title, subtitle, titleH, subtitleH, hasOverlay,
+    title, subtitle, titleH, subtitleH, titleFontSize, subtitleFontSize, hasOverlay,
   );
 }
 
@@ -174,9 +218,12 @@ async function frameWithDevice(
   subtitle: string | undefined,
   titleH: number,
   subtitleH: number,
+  titleFontSize: number,
+  subtitleFontSize: number,
   hasOverlay: boolean,
 ): Promise<Buffer> {
   const fc = getFrameConfig(spec);
+  const frameColors = resolveFrameColors(opts.frameColor);
 
   const bezelX = Math.round(deviceW * fc.bezelX);
   const bezelTop = Math.round(deviceH * fc.bezelTop);
@@ -208,18 +255,23 @@ async function frameWithDevice(
   const deviceBodySvg = buildDeviceBodySvg(
     deviceW, deviceH, bodyRadius,
     bezelX, bezelTop, screenW, screenH, screenRadius,
-    fc.homeButton,
+    fc.homeButton, frameColors,
   );
 
   // Build background
   const bgSvg = buildBackgroundSvg(canvasW, canvasH, opts.background);
 
-  // Build text overlay
-  const textSvg = hasOverlay
-    ? buildTextSvg(canvasW, padY, titleH, subtitleH, title, subtitle, opts)
+  // Build pattern overlay
+  const patternSvg = opts.pattern
+    ? buildPatternSvg(canvasW, canvasH, opts.pattern, opts.patternColor, opts.patternOpacity)
     : null;
 
-  // Build shadow (cast by device body)
+  // Build text overlay
+  const textSvg = hasOverlay
+    ? buildTextSvg(canvasW, padY, titleH, subtitleH, titleFontSize, subtitleFontSize, title, subtitle, opts)
+    : null;
+
+  // Build shadow
   let shadowBuf: Buffer | null = null;
   if (opts.shadow) {
     const sp = 50;
@@ -227,15 +279,18 @@ async function frameWithDevice(
       <rect x="${sp}" y="${sp}" width="${deviceW}" height="${deviceH}"
         rx="${bodyRadius}" ry="${bodyRadius}" fill="rgba(0,0,0,0.4)"/>
     </svg>`;
-    shadowBuf = await sharp(Buffer.from(shadowSvg))
-      .blur(25)
-      .png()
-      .toBuffer();
+    shadowBuf = await sharp(Buffer.from(shadowSvg)).blur(25).png().toBuffer();
   }
 
   // Composite layers
   const layers: sharp.OverlayOptions[] = [];
 
+  // Pattern
+  if (patternSvg) {
+    layers.push({ input: Buffer.from(patternSvg), top: 0, left: 0 });
+  }
+
+  // Shadow
   if (shadowBuf) {
     layers.push({ input: shadowBuf, top: topOffset - 50 + 12, left: padX - 50 });
   }
@@ -243,25 +298,19 @@ async function frameWithDevice(
   // Device body
   layers.push({ input: Buffer.from(deviceBodySvg), top: topOffset, left: padX });
 
-  // Screenshot inside device
+  // Screenshot
   layers.push({ input: roundedScreen, top: topOffset + bezelTop, left: padX + bezelX });
 
-  // Dynamic Island
+  // Dynamic Island (ellipse)
   if (fc.dynamicIsland) {
     const diW = Math.round(screenW * 0.26);
-    const diH = Math.round(Math.max(screenH * 0.013, 12));
-    const diX = Math.round((screenW - diW) / 2);
-    const diY = Math.round(screenH * 0.013);
-    const diRadius = Math.round(diH / 2);
+    const diH = Math.round(Math.max(screenH * 0.014, 14));
+    const diCx = Math.round(screenW / 2);
+    const diCy = Math.round(screenH * 0.014 + diH / 2);
     const diSvg = `<svg width="${screenW}" height="${screenH}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="${diX}" y="${diY}" width="${diW}" height="${diH}"
-        rx="${diRadius}" ry="${diRadius}" fill="#000000"/>
+      <ellipse cx="${diCx}" cy="${diCy}" rx="${Math.round(diW / 2)}" ry="${Math.round(diH / 2)}" fill="#000000"/>
     </svg>`;
-    layers.push({
-      input: Buffer.from(diSvg),
-      top: topOffset + bezelTop,
-      left: padX + bezelX,
-    });
+    layers.push({ input: Buffer.from(diSvg), top: topOffset + bezelTop, left: padX + bezelX });
   }
 
   // Text
@@ -273,7 +322,7 @@ async function frameWithDevice(
   return sharp(bg).composite(layers).png({ quality: 100 }).toBuffer();
 }
 
-// ─── Frame WITHOUT device bezel (original behavior) ────────
+// ─── Frame WITHOUT device bezel ────────────────────────────
 
 async function frameWithoutDevice(
   input: string,
@@ -289,6 +338,8 @@ async function frameWithoutDevice(
   subtitle: string | undefined,
   titleH: number,
   subtitleH: number,
+  titleFontSize: number,
+  subtitleFontSize: number,
   hasOverlay: boolean,
 ): Promise<Buffer> {
   const cornerR = Math.round(areaW * opts.borderRadius);
@@ -310,8 +361,11 @@ async function frameWithoutDevice(
     .toBuffer();
 
   const bgSvg = buildBackgroundSvg(canvasW, canvasH, opts.background);
+  const patternSvg = opts.pattern
+    ? buildPatternSvg(canvasW, canvasH, opts.pattern, opts.patternColor, opts.patternOpacity)
+    : null;
   const textSvg = hasOverlay
-    ? buildTextSvg(canvasW, padY, titleH, subtitleH, title, subtitle, opts)
+    ? buildTextSvg(canvasW, padY, titleH, subtitleH, titleFontSize, subtitleFontSize, title, subtitle, opts)
     : null;
 
   let shadowBuf: Buffer | null = null;
@@ -325,6 +379,9 @@ async function frameWithoutDevice(
   }
 
   const layers: sharp.OverlayOptions[] = [];
+  if (patternSvg) {
+    layers.push({ input: Buffer.from(patternSvg), top: 0, left: 0 });
+  }
   if (shadowBuf) {
     layers.push({ input: shadowBuf, top: topOffset - 40 + 8, left: padX - 40 });
   }
@@ -349,10 +406,10 @@ function buildDeviceBodySvg(
   screenH: number,
   screenRadius: number,
   homeButton: boolean,
+  colors: [string, string, string],
 ): string {
   let extras = '';
 
-  // Home button for older iPhones
   if (homeButton) {
     const btnR = Math.round(w * 0.06);
     const btnCx = Math.round(w / 2);
@@ -363,15 +420,15 @@ function buildDeviceBodySvg(
 
   return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="body" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#303032"/>
-        <stop offset="10%" stop-color="#1c1c1e"/>
-        <stop offset="100%" stop-color="#1a1a1c"/>
+      <linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${colors[0]}"/>
+        <stop offset="50%" stop-color="${colors[1]}"/>
+        <stop offset="100%" stop-color="${colors[2]}"/>
       </linearGradient>
     </defs>
     <rect width="${w}" height="${h}" rx="${bodyRadius}" ry="${bodyRadius}" fill="url(#body)"/>
     <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="${bodyRadius}" ry="${bodyRadius}"
-      fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5"/>
+      fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>
     <rect x="${bezelX}" y="${bezelTop}" width="${screenW}" height="${screenH}"
       rx="${screenRadius}" ry="${screenRadius}" fill="#000000"/>
     ${extras}
@@ -407,6 +464,58 @@ function buildBackgroundSvg(w: number, h: number, background: string): string {
   </svg>`;
 }
 
+// ─── Pattern SVG ───────────────────────────────────────────
+
+const PATTERNS: Record<string, (size: number, color: string) => string> = {
+  dots: (s, c) => `<circle cx="${s / 2}" cy="${s / 2}" r="${s * 0.08}" fill="${c}"/>`,
+
+  grid: (s, c) =>
+    `<line x1="0" y1="${s}" x2="${s}" y2="${s}" stroke="${c}" stroke-width="1"/>
+     <line x1="${s}" y1="0" x2="${s}" y2="${s}" stroke="${c}" stroke-width="1"/>`,
+
+  diagonal: (s, c) =>
+    `<line x1="0" y1="${s}" x2="${s}" y2="0" stroke="${c}" stroke-width="1.5"/>`,
+
+  'cross-dots': (s, c) =>
+    `<circle cx="${s / 2}" cy="${s / 2}" r="${s * 0.06}" fill="${c}"/>
+     <line x1="${s * 0.3}" y1="${s / 2}" x2="${s * 0.7}" y2="${s / 2}" stroke="${c}" stroke-width="1"/>
+     <line x1="${s / 2}" y1="${s * 0.3}" x2="${s / 2}" y2="${s * 0.7}" stroke="${c}" stroke-width="1"/>`,
+
+  waves: (s, c) => {
+    const h = s / 2;
+    return `<path d="M0 ${h} Q${s / 4} ${h - s * 0.3} ${s / 2} ${h} T${s} ${h}"
+      fill="none" stroke="${c}" stroke-width="1.5"/>`;
+  },
+
+  diamonds: (s, c) => {
+    const m = s / 2;
+    return `<polygon points="${m},${s * 0.1} ${s * 0.9},${m} ${m},${s * 0.9} ${s * 0.1},${m}" fill="none" stroke="${c}" stroke-width="1"/>`;
+  },
+};
+
+function buildPatternSvg(
+  w: number,
+  h: number,
+  pattern: string,
+  color: string,
+  opacity: number,
+): string | null {
+  const builder = PATTERNS[pattern];
+  if (!builder) return null;
+
+  const tileSize = Math.round(Math.min(w, h) * 0.025);
+  const tile = builder(tileSize, color);
+
+  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="pat" width="${tileSize}" height="${tileSize}" patternUnits="userSpaceOnUse">
+        ${tile}
+      </pattern>
+    </defs>
+    <rect width="${w}" height="${h}" fill="url(#pat)" opacity="${opacity}"/>
+  </svg>`;
+}
+
 // ─── Text SVG ──────────────────────────────────────────────
 
 function buildTextSvg(
@@ -414,26 +523,26 @@ function buildTextSvg(
   padY: number,
   titleH: number,
   subtitleH: number,
+  titleFontSize: number,
+  subtitleFontSize: number,
   title: string | undefined,
   subtitle: string | undefined,
   opts: FrameOptions,
 ): string {
   const cx = Math.round(canvasW / 2);
-  const titleFontSize = Math.round(canvasW * opts.titleSize);
-  const subtitleFontSize = Math.round(canvasW * opts.subtitleSize);
   const font = `system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
 
   let textElements = '';
 
   if (title) {
-    const titleY = padY + titleH * 0.7;
+    const titleY = padY + Math.round(titleFontSize * 1.25);
     textElements += `<text x="${cx}" y="${titleY}" text-anchor="middle"
-      font-size="${titleFontSize}" font-weight="700" fill="${opts.titleColor}"
+      font-size="${titleFontSize}" font-weight="800" fill="${opts.titleColor}"
       font-family="${font}">${escapeXml(title)}</text>`;
   }
 
   if (subtitle) {
-    const subtitleY = padY + titleH + subtitleH * 0.7;
+    const subtitleY = padY + titleH + Math.round(subtitleFontSize * 1.4);
     textElements += `<text x="${cx}" y="${subtitleY}" text-anchor="middle"
       font-size="${subtitleFontSize}" font-weight="400" fill="${opts.subtitleColor}"
       font-family="${font}">${escapeXml(subtitle)}</text>`;

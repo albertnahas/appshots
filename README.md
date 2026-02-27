@@ -61,8 +61,14 @@ appshots frame ./screenshots \
   --title "Your App Name" \
   --subtitle "Your tagline here"
 
-# Solid background
-appshots frame ./screenshots --device ipad-13 --background "#1a1a2e" --title "Dashboard"
+# Silver device frame
+appshots frame ./screenshots --device iphone-6.9 \
+  --background "linear-gradient(135deg, #f093fb, #f5576c)" \
+  --frame-color silver --title "Premium Look"
+
+# Pattern background
+appshots frame ./screenshots --device iphone-6.9 \
+  --background "#1a1a2e" --pattern dots --title "Dashboard"
 
 # Process a single file
 appshots frame home.png --device iphone-6.9 -o ./store-ready
@@ -123,6 +129,9 @@ export default defineConfig({
     titleColor: '#ffffff',
     subtitleColor: 'rgba(255,255,255,0.7)',
     shadow: true,
+    frameColor: 'black',
+    pattern: 'dots',
+    patternOpacity: 0.1,
   },
 
   capture: {
@@ -166,6 +175,9 @@ Also supports `.js`, `.mjs`, and `.json` formats.
 | `--landscape` | Landscape orientation | — |
 | `--no-shadow` | Disable drop shadow | — |
 | `--no-device-frame` | Disable device frame bezel | — |
+| `--frame-color <color>` | Frame color: `black`, `silver`, `gold`, `blue`, `red`, `white`, or hex | `black` |
+| `--pattern <name>` | Background pattern: `dots`, `grid`, `diagonal`, `waves`, `diamonds`, `cross-dots` | — |
+| `--pattern-opacity <ratio>` | Pattern opacity (0–1) | `0.1` |
 | `-c, --config <path>` | Config file path | — |
 
 ### `appshots capture`
