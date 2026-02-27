@@ -165,6 +165,7 @@ Also supports `.js`, `.mjs`, and `.json` formats.
 | `--border-radius <ratio>` | Corner radius ratio (0–0.2) | `0.04` |
 | `--landscape` | Landscape orientation | — |
 | `--no-shadow` | Disable drop shadow | — |
+| `--no-device-frame` | Disable device frame bezel | — |
 | `-c, --config <path>` | Config file path | — |
 
 ### `appshots capture`

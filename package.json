@@ -1,6 +1,6 @@
 {
   "name": "appshots",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Generate App Store-ready screenshots from your web app. Capture, frame, and validate — all from the CLI.",
   "type": "module",
   "main": "./dist/index.js",

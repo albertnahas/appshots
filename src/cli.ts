@@ -12,7 +12,7 @@ program
   .description(
     'Generate App Store-ready screenshots. Capture, frame, and validate.'
   )
-  .version('1.0.0');
+  .version('1.1.0');
 
 program
   .command('frame <input>')
@@ -26,6 +26,7 @@ program
   .option('--border-radius <ratio>', 'corner radius ratio (0-0.2)')
   .option('--landscape', 'landscape orientation')
   .option('--no-shadow', 'disable drop shadow')
+  .option('--no-device-frame', 'disable device frame bezel')
   .option('-c, --config <path>', 'config file path')
   .action(frameCommand);
 

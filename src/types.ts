@@ -43,6 +43,7 @@ export const frameOptionsSchema = z.object({
   titleSize: z.number().min(0).max(0.2).default(0.05),
   subtitleSize: z.number().min(0).max(0.1).default(0.028),
   shadow: z.boolean().default(true),
+  deviceFrame: z.boolean().default(true),
 });
 
 export type FrameOptions = z.infer<typeof frameOptionsSchema>;

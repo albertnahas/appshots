@@ -21,6 +21,7 @@ interface FrameCommandOptions {
   landscape?: boolean;
   config?: string;
   shadow?: boolean;
+  deviceFrame?: boolean;
 }
 
 export async function frameCommand(
@@ -54,6 +55,7 @@ export async function frameCommand(
     ...(opts.padding && { padding: parseFloat(opts.padding) }),
     ...(opts.borderRadius && { borderRadius: parseFloat(opts.borderRadius) }),
     ...(opts.shadow !== undefined && { shadow: opts.shadow }),
+    ...(opts.deviceFrame !== undefined && { deviceFrame: opts.deviceFrame }),
   };
 
   // Get per-screen titles from config
