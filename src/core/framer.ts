@@ -20,13 +20,14 @@ interface FrameInput {
 // ─── Device frame configuration ────────────────────────────
 
 interface DeviceFrameConfig {
-  bezelX: number;
-  bezelTop: number;
-  bezelBottom: number;
-  bodyRadius: number;
-  screenRadius: number;
+  bezelWidth: number; // ratio of phone width
+  bodyRadius: number; // ratio of phone width
+  screenRadius: number; // ratio of phone width
   dynamicIsland: boolean;
   homeButton: boolean;
+  shadowBlur: number; // ratio of phone width
+  notchWidthRatio: number; // ratio of phone width
+  notchHeightRatio: number; // ratio of phone height
 }
 
 function getFrameConfig(spec: DeviceSpec): DeviceFrameConfig {
@@ -34,70 +35,64 @@ function getFrameConfig(spec: DeviceSpec): DeviceFrameConfig {
     const isOlder = spec.slug === 'iphone-5.5' || spec.slug === 'iphone-4.7';
     if (isOlder) {
       return {
-        bezelX: 0.04,
-        bezelTop: 0.055,
-        bezelBottom: 0.055,
-        bodyRadius: 0.1,
+        bezelWidth: 0.04,
+        bodyRadius: 0.08,
         screenRadius: 0.02,
         dynamicIsland: false,
         homeButton: true,
+        shadowBlur: 0.07,
+        notchWidthRatio: 0,
+        notchHeightRatio: 0,
       };
     }
     return {
-      bezelX: 0.03,
-      bezelTop: 0.025,
-      bezelBottom: 0.025,
-      bodyRadius: 0.12,
-      screenRadius: 0.09,
+      bezelWidth: 0.022,
+      bodyRadius: 0.061,
+      screenRadius: 0.053,
       dynamicIsland: true,
       homeButton: false,
+      shadowBlur: 0.07,
+      notchWidthRatio: 0.131,
+      notchHeightRatio: 0.017,
     };
   }
 
-  if (spec.platform === 'ios' && spec.category === 'tablet') {
+  if (spec.category === 'tablet') {
     return {
-      bezelX: 0.025,
-      bezelTop: 0.02,
-      bezelBottom: 0.02,
-      bodyRadius: 0.04,
-      screenRadius: 0.025,
+      bezelWidth: 0.018,
+      bodyRadius: 0.035,
+      screenRadius: 0.028,
       dynamicIsland: false,
       homeButton: false,
+      shadowBlur: 0.06,
+      notchWidthRatio: 0,
+      notchHeightRatio: 0,
     };
   }
 
-  if (spec.platform === 'android' && spec.category === 'phone') {
+  // Android phones
+  if (spec.category === 'phone') {
     return {
-      bezelX: 0.028,
-      bezelTop: 0.022,
-      bezelBottom: 0.022,
-      bodyRadius: 0.1,
-      screenRadius: 0.075,
+      bezelWidth: 0.022,
+      bodyRadius: 0.055,
+      screenRadius: 0.048,
       dynamicIsland: false,
       homeButton: false,
-    };
-  }
-
-  if (spec.platform === 'android' && spec.category === 'tablet') {
-    return {
-      bezelX: 0.025,
-      bezelTop: 0.02,
-      bezelBottom: 0.02,
-      bodyRadius: 0.04,
-      screenRadius: 0.025,
-      dynamicIsland: false,
-      homeButton: false,
+      shadowBlur: 0.07,
+      notchWidthRatio: 0,
+      notchHeightRatio: 0,
     };
   }
 
   return {
-    bezelX: 0.03,
-    bezelTop: 0.025,
-    bezelBottom: 0.025,
-    bodyRadius: 0.08,
-    screenRadius: 0.06,
+    bezelWidth: 0.022,
+    bodyRadius: 0.05,
+    screenRadius: 0.04,
     dynamicIsland: false,
     homeButton: false,
+    shadowBlur: 0.06,
+    notchWidthRatio: 0,
+    notchHeightRatio: 0,
   };
 }
 
@@ -114,7 +109,6 @@ const FRAME_COLORS: Record<string, [string, string, string]> = {
 
 function resolveFrameColors(frameColor: string): [string, string, string] {
   if (FRAME_COLORS[frameColor]) return FRAME_COLORS[frameColor];
-  // Treat as hex — derive gradient from single color
   const base = frameColor;
   return [lighten(base, 30), base, darken(base, 20)];
 }
@@ -139,11 +133,7 @@ function darken(hex: string, pct: number): string {
 
 function parseHex(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
-  return [
-    parseInt(h.slice(0, 2), 16),
-    parseInt(h.slice(2, 4), 16),
-    parseInt(h.slice(4, 6), 16),
-  ];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 }
 
 function toHex(r: number, g: number, b: number): string {
@@ -173,15 +163,14 @@ export async function frameScreenshot(params: FrameInput): Promise<Buffer> {
       .toBuffer();
   }
 
-  // Layout calculations — text sizing based on font size
+  // Layout — text sizing based on font size
   const padX = Math.round(canvasW * opts.padding);
   const padY = Math.round(canvasH * opts.padding * 0.6);
   const titleFontSize = Math.round(canvasW * opts.titleSize);
   const subtitleFontSize = Math.round(canvasW * opts.subtitleSize);
   const titleH = title ? Math.round(titleFontSize * 2) : 0;
   const subtitleH = subtitle ? Math.round(subtitleFontSize * 2.4) : 0;
-  const textH = titleH + subtitleH;
-  const topOffset = padY + textH;
+  const topOffset = padY + titleH + subtitleH;
   const areaW = canvasW - padX * 2;
   const areaH = canvasH - topOffset - padY;
 
@@ -201,7 +190,7 @@ export async function frameScreenshot(params: FrameInput): Promise<Buffer> {
   );
 }
 
-// ─── Frame WITH device bezel ───────────────────────────────
+// ─── Frame WITH device bezel (LeanDine-style) ──────────────
 
 async function frameWithDevice(
   input: string,
@@ -209,8 +198,8 @@ async function frameWithDevice(
   opts: FrameOptions,
   canvasW: number,
   canvasH: number,
-  deviceW: number,
-  deviceH: number,
+  areaW: number,
+  areaH: number,
   padX: number,
   topOffset: number,
   padY: number,
@@ -225,101 +214,171 @@ async function frameWithDevice(
   const fc = getFrameConfig(spec);
   const frameColors = resolveFrameColors(opts.frameColor);
 
-  const bezelX = Math.round(deviceW * fc.bezelX);
-  const bezelTop = Math.round(deviceH * fc.bezelTop);
-  const bezelBottom = Math.round(deviceH * fc.bezelBottom);
-  const bodyRadius = Math.round(deviceW * fc.bodyRadius);
-  const screenRadius = Math.round(deviceW * fc.screenRadius);
-  const screenW = deviceW - bezelX * 2;
-  const screenH = deviceH - bezelTop - bezelBottom;
+  // Phone dimensions — screen fills the available area, body wraps around it
+  const bezel = Math.round(areaW * fc.bezelWidth);
+  const phoneW = areaW;
+  const phoneH = areaH;
+  const screenW = phoneW - bezel * 2;
+  const screenH = phoneH - bezel * 2;
+  const phoneX = padX;
+  const phoneY = topOffset;
+
+  const bodyRadius = Math.round(phoneW * fc.bodyRadius);
+  const screenRadius = Math.round(phoneW * fc.screenRadius);
+  const shadowBlur = Math.round(phoneW * fc.shadowBlur);
 
   // Resize screenshot to screen area
-  const resized = await sharp(input)
+  const resizedScreenshot = await sharp(input)
     .resize(screenW, screenH, { fit: 'cover', position: 'center' })
     .png()
     .toBuffer();
 
-  // Apply screen corner radius
-  const screenMask = Buffer.from(
-    `<svg width="${screenW}" height="${screenH}">
-      <rect width="${screenW}" height="${screenH}" rx="${screenRadius}" ry="${screenRadius}" fill="white"/>
-    </svg>`
-  );
-  const roundedScreen = await sharp(resized)
-    .ensureAlpha()
-    .composite([{ input: screenMask, blend: 'dest-in' }])
-    .png()
-    .toBuffer();
-
-  // Build device body SVG
-  const deviceBodySvg = buildDeviceBodySvg(
-    deviceW, deviceH, bodyRadius,
-    bezelX, bezelTop, screenW, screenH, screenRadius,
-    fc.homeButton, frameColors,
+  // Build full-canvas phone frame SVG (with SVG filter shadow, notch, buttons)
+  const frameSvg = buildPhoneFrameSvg(
+    canvasW, canvasH,
+    phoneX, phoneY, phoneW, phoneH,
+    bezel, bodyRadius, screenRadius, screenW, screenH,
+    shadowBlur, frameColors, fc,
   );
 
-  // Build background
+  // Background
   const bgSvg = buildBackgroundSvg(canvasW, canvasH, opts.background);
 
-  // Build pattern overlay
+  // Pattern overlay
   const patternSvg = opts.pattern
     ? buildPatternSvg(canvasW, canvasH, opts.pattern, opts.patternColor, opts.patternOpacity)
     : null;
 
-  // Build text overlay
+  // Text overlay
   const textSvg = hasOverlay
     ? buildTextSvg(canvasW, padY, titleH, subtitleH, titleFontSize, subtitleFontSize, title, subtitle, opts)
     : null;
 
-  // Build shadow
-  let shadowBuf: Buffer | null = null;
-  if (opts.shadow) {
-    const sp = 50;
-    const shadowSvg = `<svg width="${deviceW + sp * 2}" height="${deviceH + sp * 2}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="${sp}" y="${sp}" width="${deviceW}" height="${deviceH}"
-        rx="${bodyRadius}" ry="${bodyRadius}" fill="rgba(0,0,0,0.4)"/>
-    </svg>`;
-    shadowBuf = await sharp(Buffer.from(shadowSvg)).blur(25).png().toBuffer();
-  }
-
-  // Composite layers
+  // Composite: bg → pattern → frame → screenshot → text
   const layers: sharp.OverlayOptions[] = [];
 
-  // Pattern
   if (patternSvg) {
     layers.push({ input: Buffer.from(patternSvg), top: 0, left: 0 });
   }
 
-  // Shadow
-  if (shadowBuf) {
-    layers.push({ input: shadowBuf, top: topOffset - 50 + 12, left: padX - 50 });
-  }
+  layers.push({ input: Buffer.from(frameSvg), top: 0, left: 0 });
 
-  // Device body
-  layers.push({ input: Buffer.from(deviceBodySvg), top: topOffset, left: padX });
+  layers.push({
+    input: resizedScreenshot,
+    top: phoneY + bezel,
+    left: phoneX + bezel,
+  });
 
-  // Screenshot
-  layers.push({ input: roundedScreen, top: topOffset + bezelTop, left: padX + bezelX });
-
-  // Dynamic Island (ellipse)
-  if (fc.dynamicIsland) {
-    const diW = Math.round(screenW * 0.26);
-    const diH = Math.round(Math.max(screenH * 0.014, 14));
-    const diCx = Math.round(screenW / 2);
-    const diCy = Math.round(screenH * 0.014 + diH / 2);
-    const diSvg = `<svg width="${screenW}" height="${screenH}" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="${diCx}" cy="${diCy}" rx="${Math.round(diW / 2)}" ry="${Math.round(diH / 2)}" fill="#000000"/>
-    </svg>`;
-    layers.push({ input: Buffer.from(diSvg), top: topOffset + bezelTop, left: padX + bezelX });
-  }
-
-  // Text
   if (textSvg) {
     layers.push({ input: Buffer.from(textSvg), top: 0, left: 0 });
   }
 
   const bg = await sharp(Buffer.from(bgSvg)).png().toBuffer();
   return sharp(bg).composite(layers).png({ quality: 100 }).toBuffer();
+}
+
+// ─── Phone frame SVG (full-canvas, with shadow filters) ────
+
+function buildPhoneFrameSvg(
+  canvasW: number,
+  canvasH: number,
+  phoneX: number,
+  phoneY: number,
+  phoneW: number,
+  phoneH: number,
+  bezel: number,
+  bodyRadius: number,
+  screenRadius: number,
+  screenW: number,
+  screenH: number,
+  shadowBlur: number,
+  colors: [string, string, string],
+  fc: DeviceFrameConfig,
+): string {
+  // Notch
+  const notchWidth = Math.round(phoneW * fc.notchWidthRatio);
+  const notchHeight = Math.round(phoneH * fc.notchHeightRatio);
+  const notchX = phoneX + Math.round((phoneW - notchWidth) / 2);
+  const notchY = phoneY + bezel - Math.round(notchHeight * 0.12);
+
+  // Side buttons (scale to phone height)
+  const powerBtnH = Math.round(phoneH * 0.033);
+  const volBtnH = Math.round(phoneH * 0.021);
+  const btnW = 4;
+  const btnRadius = 2;
+
+  let notchSvg = '';
+  if (fc.dynamicIsland && notchWidth > 0) {
+    notchSvg = `<ellipse
+      cx="${notchX + notchWidth / 2}" cy="${notchY + notchHeight / 2}"
+      rx="${notchWidth / 2}" ry="${notchHeight / 2}"
+      fill="#000000"/>`;
+  }
+
+  let homeButtonSvg = '';
+  if (fc.homeButton) {
+    const btnR = Math.round(phoneW * 0.05);
+    const btnCx = phoneX + Math.round(phoneW / 2);
+    const btnCy = phoneY + phoneH - Math.round(bezel * 2.2);
+    homeButtonSvg = `<circle cx="${btnCx}" cy="${btnCy}" r="${btnR}"
+      fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>`;
+  }
+
+  return `<svg width="${canvasW}" height="${canvasH}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="${shadowBlur / 2}"/>
+        <feOffset dx="0" dy="${Math.round(shadowBlur / 3)}" result="offsetblur"/>
+        <feComponentTransfer>
+          <feFuncA type="linear" slope="0.4"/>
+        </feComponentTransfer>
+        <feMerge>
+          <feMergeNode/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+
+      <linearGradient id="phoneGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style="stop-color:${colors[0]};stop-opacity:1"/>
+        <stop offset="50%" style="stop-color:${colors[1]};stop-opacity:1"/>
+        <stop offset="100%" style="stop-color:${colors[2]};stop-opacity:1"/>
+      </linearGradient>
+    </defs>
+
+    <!-- Phone body -->
+    <rect
+      x="${phoneX}" y="${phoneY}"
+      width="${phoneW}" height="${phoneH}"
+      rx="${bodyRadius}" ry="${bodyRadius}"
+      fill="url(#phoneGradient)"
+      filter="url(#shadow)"/>
+
+    <!-- Screen area -->
+    <rect
+      x="${phoneX + bezel}" y="${phoneY + bezel}"
+      width="${screenW}" height="${screenH}"
+      rx="${screenRadius}" ry="${screenRadius}"
+      fill="#000000" opacity="0.3"/>
+
+    ${notchSvg}
+    ${homeButtonSvg}
+
+    <!-- Power button (right) -->
+    <rect
+      x="${phoneX + phoneW + 2}" y="${phoneY + Math.round(phoneH / 3)}"
+      width="${btnW}" height="${powerBtnH}"
+      rx="${btnRadius}" fill="#1A1A1A" opacity="0.8"/>
+
+    <!-- Volume buttons (left) -->
+    <rect
+      x="${phoneX - btnW - 2}" y="${phoneY + Math.round(phoneH / 4)}"
+      width="${btnW}" height="${volBtnH}"
+      rx="${btnRadius}" fill="#1A1A1A" opacity="0.8"/>
+    <rect
+      x="${phoneX - btnW - 2}" y="${phoneY + Math.round(phoneH / 4) + volBtnH + Math.round(volBtnH * 0.3)}"
+      width="${btnW}" height="${volBtnH}"
+      rx="${btnRadius}" fill="#1A1A1A" opacity="0.8"/>
+  </svg>`;
 }
 
 // ─── Frame WITHOUT device bezel ────────────────────────────
@@ -394,47 +453,6 @@ async function frameWithoutDevice(
   return sharp(bg).composite(layers).png({ quality: 100 }).toBuffer();
 }
 
-// ─── Device body SVG ───────────────────────────────────────
-
-function buildDeviceBodySvg(
-  w: number,
-  h: number,
-  bodyRadius: number,
-  bezelX: number,
-  bezelTop: number,
-  screenW: number,
-  screenH: number,
-  screenRadius: number,
-  homeButton: boolean,
-  colors: [string, string, string],
-): string {
-  let extras = '';
-
-  if (homeButton) {
-    const btnR = Math.round(w * 0.06);
-    const btnCx = Math.round(w / 2);
-    const btnCy = Math.round(h - bezelTop * 0.55);
-    extras += `<circle cx="${btnCx}" cy="${btnCy}" r="${btnR}"
-      fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>`;
-  }
-
-  return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="${colors[0]}"/>
-        <stop offset="50%" stop-color="${colors[1]}"/>
-        <stop offset="100%" stop-color="${colors[2]}"/>
-      </linearGradient>
-    </defs>
-    <rect width="${w}" height="${h}" rx="${bodyRadius}" ry="${bodyRadius}" fill="url(#body)"/>
-    <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="${bodyRadius}" ry="${bodyRadius}"
-      fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>
-    <rect x="${bezelX}" y="${bezelTop}" width="${screenW}" height="${screenH}"
-      rx="${screenRadius}" ry="${screenRadius}" fill="#000000"/>
-    ${extras}
-  </svg>`;
-}
-
 // ─── Background SVG ────────────────────────────────────────
 
 function buildBackgroundSvg(w: number, h: number, background: string): string {
@@ -494,11 +512,7 @@ const PATTERNS: Record<string, (size: number, color: string) => string> = {
 };
 
 function buildPatternSvg(
-  w: number,
-  h: number,
-  pattern: string,
-  color: string,
-  opacity: number,
+  w: number, h: number, pattern: string, color: string, opacity: number,
 ): string | null {
   const builder = PATTERNS[pattern];
   if (!builder) return null;
