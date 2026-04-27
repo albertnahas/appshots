@@ -26,6 +26,17 @@ interface FrameCommandOptions {
   pattern?: string;
   patternOpacity?: string;
   textPosition?: string;
+  titleSize?: string;
+  subtitleSize?: string;
+  titleWeight?: string;
+  subtitleWeight?: string;
+  titleSpacing?: string;
+  subtitleSpacing?: string;
+  titleColor?: string;
+  subtitleColor?: string;
+  fontFamily?: string;
+  titleLineHeight?: string;
+  autoFitTitle?: boolean;
 }
 
 export async function frameCommand(
@@ -64,6 +75,17 @@ export async function frameCommand(
     ...(opts.pattern && { pattern: opts.pattern }),
     ...(opts.patternOpacity && { patternOpacity: parseFloat(opts.patternOpacity) }),
     ...(opts.textPosition && { textPosition: opts.textPosition as 'top' | 'bottom' }),
+    ...(opts.titleSize && { titleSize: parseFloat(opts.titleSize) }),
+    ...(opts.subtitleSize && { subtitleSize: parseFloat(opts.subtitleSize) }),
+    ...(opts.titleWeight && { titleWeight: parseInt(opts.titleWeight, 10) }),
+    ...(opts.subtitleWeight && { subtitleWeight: parseInt(opts.subtitleWeight, 10) }),
+    ...(opts.titleSpacing !== undefined && { titleSpacing: parseFloat(opts.titleSpacing) }),
+    ...(opts.subtitleSpacing !== undefined && { subtitleSpacing: parseFloat(opts.subtitleSpacing) }),
+    ...(opts.titleColor && { titleColor: opts.titleColor }),
+    ...(opts.subtitleColor && { subtitleColor: opts.subtitleColor }),
+    ...(opts.fontFamily && { fontFamily: opts.fontFamily }),
+    ...(opts.titleLineHeight && { titleLineHeight: parseFloat(opts.titleLineHeight) }),
+    ...(opts.autoFitTitle && { autoFitTitle: opts.autoFitTitle }),
   };
 
   // Get per-screen titles from config
