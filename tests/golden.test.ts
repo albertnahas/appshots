@@ -121,7 +121,53 @@ describe('golden: frameScreenshot renders', () => {
     await compareToGolden(result, 'dish-details-noframe.png');
   });
 
-  // ── 5. Custom typography flags (Phase 2) ──────────────────────────────────
+  // ── 5. Multi-line subtitle (literal \n) at bottom ─────────────────────────
+  // Covers: subtitle splitLines + multi-line tspan rendering, bottom-position
+  // upward flow so device frame is not clipped
+  it('device frame · multi-line subtitle (\\n) · bottom', async () => {
+    const result = await frameScreenshot({
+      input: join(RAW_DIR, 'dish-details.png'),
+      device: 'iphone-6.9',
+      title: 'Scan Any Menu',
+      subtitle: 'Photo, URL,\\nor PDF',
+      options: { background: '#1a1a2e' },
+    });
+    await compareToGolden(result, 'dish-details-multiline-subtitle.png');
+  });
+
+  // ── 6. Multi-line title + multi-line subtitle at top ──────────────────────
+  // Covers: real-newline parsing, top-position downward flow for both
+  it('device frame · multi-line title + subtitle · top (real \\n)', async () => {
+    const result = await frameScreenshot({
+      input: join(RAW_DIR, 'scan.png'),
+      device: 'iphone-6.9',
+      title: 'Track Your\nProgress',         // real newline char
+      subtitle: 'Across all\nyour devices',  // real newline char
+      options: {
+        background: '#1a2f4f',
+        textPosition: 'top',
+      },
+    });
+    await compareToGolden(result, 'scan-multiline-both-top.png');
+  });
+
+  // ── 7. No device frame · multi-line subtitle ──────────────────────────────
+  // Covers: buildTextSvg multi-line subtitle path + subtitleH layout math
+  it('no device frame · multi-line subtitle', async () => {
+    const result = await frameScreenshot({
+      input: join(RAW_DIR, 'results.png'),
+      device: 'iphone-6.9',
+      title: 'Results',
+      subtitle: 'Line one\\nLine two',
+      options: {
+        background: '#2d2d2d',
+        deviceFrame: false,
+      },
+    });
+    await compareToGolden(result, 'results-noframe-multiline-subtitle.png');
+  });
+
+  // ── 8. Custom typography flags (Phase 2) ──────────────────────────────────
   // Covers: titleWeight, titleSize, titleSpacing, titleLineHeight options
   it('device frame · custom typography flags', async () => {
     const result = await frameScreenshot({

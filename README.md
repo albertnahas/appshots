@@ -243,16 +243,19 @@ Checks: dimensions, format (PNG/JPEG), transparency, file size (< 10 MB), color 
 
 ## Typography
 
-### Multi-line titles
+### Multi-line titles and subtitles
 
-Pass a literal `\n` (backslash-n) in the title to force a line break:
+Pass a literal `\n` (backslash-n) in either title or subtitle to force a line break:
 
 ```bash
 appshots frame screenshot.png --device iphone-6.9 \
-  --title "Scan Your\nProgress"
+  --title "Scan Your\nProgress" \
+  --subtitle "Photo, URL,\nor PDF"
 ```
 
-In a shell script, use double quotes — bash passes `\n` as two characters (backslash + n) rather than a newline, which is exactly what appshots expects.
+In a shell script, use double quotes — bash passes `\n` as two characters (backslash + n) rather than a newline, which is exactly what appshots expects. From a config file or programmatic API, real `\n` newlines work too.
+
+The layout adjusts automatically: subtitle lines flow downward in `--text-position top` and upward in `--text-position bottom`, and the device frame is repositioned so nothing gets clipped.
 
 ### Auto-fit
 

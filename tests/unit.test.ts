@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { firstFamily } from '../src/core/fonts.js';
-import { estimateTextWidth, computeAutoFit } from '../src/core/framer.js';
+import { estimateTextWidth, computeAutoFit, splitLines } from '../src/core/framer.js';
 import { frameOptionsSchema } from '../src/types.js';
 
 // ─── firstFamily ──────────────────────────────────────────
@@ -20,6 +20,42 @@ describe('firstFamily', () => {
 
   it('handles single-family stack', () => {
     expect(firstFamily('Roboto')).toBe('Roboto');
+  });
+});
+
+// ─── splitLines ───────────────────────────────────────────
+
+describe('splitLines', () => {
+  it('returns [] for empty input', () => {
+    expect(splitLines('')).toEqual([]);
+  });
+
+  it('returns single-element array for plain string', () => {
+    expect(splitLines('Hello world')).toEqual(['Hello world']);
+  });
+
+  it('splits on literal backslash-n (CLI default from bash)', () => {
+    expect(splitLines('Foo\\nBar')).toEqual(['Foo', 'Bar']);
+  });
+
+  it('splits on real newline character (config files / programmatic)', () => {
+    expect(splitLines('Foo\nBar')).toEqual(['Foo', 'Bar']);
+  });
+
+  it('splits on CRLF', () => {
+    expect(splitLines('Foo\r\nBar')).toEqual(['Foo', 'Bar']);
+  });
+
+  it('splits on literal \\r\\n', () => {
+    expect(splitLines('Foo\\r\\nBar')).toEqual(['Foo', 'Bar']);
+  });
+
+  it('handles three lines', () => {
+    expect(splitLines('A\\nB\\nC')).toEqual(['A', 'B', 'C']);
+  });
+
+  it('handles mixed real and literal breaks', () => {
+    expect(splitLines('A\nB\\nC')).toEqual(['A', 'B', 'C']);
   });
 });
 
@@ -94,6 +130,12 @@ describe('computeAutoFit', () => {
     const { lines, fontSize } = computeAutoFit('Foo\\nBar', 1320, opts, 80);
     expect(lines).toEqual(['Foo', 'Bar']);
     expect(fontSize).toBe(80); // unchanged — short enough
+  });
+
+  it('preserves explicit real newline splits (config / programmatic)', () => {
+    const { lines, fontSize } = computeAutoFit('Foo\nBar', 1320, opts, 80);
+    expect(lines).toEqual(['Foo', 'Bar']);
+    expect(fontSize).toBe(80);
   });
 
   it('respects custom padding in available width calculation', () => {

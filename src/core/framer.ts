@@ -5,6 +5,8 @@ import { checkFont, firstFamily } from './fonts.js';
 
 const warnedFonts = new Set<string>();
 
+const SUBTITLE_LINE_HEIGHT = 1.3;
+
 interface FrameInput {
   /** Path to the raw screenshot */
   input: string;
@@ -206,24 +208,29 @@ export async function frameScreenshot(params: FrameInput): Promise<Buffer> {
 
   // Phase 3a+3b: auto-fit and multi-line-aware title height
   let effectiveTitleFontSize = baseTitleFontSize;
-  let titleLines = title ? title.split('\\n') : [];
+  let titleLines = title ? splitLines(title) : [];
   if (title && opts.autoFitTitle) {
     const fit = computeAutoFit(title, canvasW, opts, baseTitleFontSize);
     effectiveTitleFontSize = fit.fontSize;
     titleLines = fit.lines;
   }
+  const subtitleLines = subtitle ? splitLines(subtitle) : [];
   const titleH = title
     ? Math.round(titleLines.length * effectiveTitleFontSize * opts.titleLineHeight + effectiveTitleFontSize * 0.5)
     : 0;
-  const subtitleH = subtitle ? Math.round(subtitleFontSize * 2.4) : 0;
+  const subtitleH = subtitle
+    ? Math.round(
+        (subtitleLines.length - 1) * subtitleFontSize * SUBTITLE_LINE_HEIGHT +
+        subtitleFontSize * 2.4,
+      )
+    : 0;
   const topOffset = padY + titleH + subtitleH;
   const areaW = canvasW - padX * 2;
   const areaH = canvasH - topOffset - padY;
 
-  const effectiveTitle = title ? titleLines.join('\\n') : undefined;
   return frameWithoutDevice(
     input, opts, canvasW, canvasH, areaW, areaH, padX, topOffset, padY,
-    effectiveTitle, subtitle, titleH, subtitleH, effectiveTitleFontSize, subtitleFontSize, hasOverlay,
+    titleLines, subtitleLines, titleH, subtitleH, effectiveTitleFontSize, subtitleFontSize, hasOverlay,
   );
 }
 
@@ -448,17 +455,20 @@ function buildDeviceTextSvg(
   let titleFontSize = Math.round(canvasW * opts.titleSize);
   const subtitleFontSize = Math.round(canvasW * opts.subtitleSize);
 
-  let titleLines = title ? title.split('\\n') : [];
+  let titleLines = title ? splitLines(title) : [];
   if (title && opts.autoFitTitle) {
     const fit = computeAutoFit(title, canvasW, opts, titleFontSize);
     titleFontSize = fit.fontSize;
     titleLines = fit.lines;
   }
+  const subtitleLines = subtitle ? splitLines(subtitle) : [];
 
   const titleSpacing = opts.titleSpacing * titleFontSize;
   const subtitleSpacing = opts.subtitleSpacing * subtitleFontSize;
   const titleAttrs = `text-anchor="middle" font-size="${titleFontSize}" font-weight="${opts.titleWeight}" fill="${opts.titleColor}" font-family="${opts.fontFamily}" letter-spacing="${titleSpacing}" font-kerning="normal" text-rendering="geometricPrecision"`;
   const subtitleAttrs = `text-anchor="middle" font-size="${subtitleFontSize}" font-weight="${opts.subtitleWeight}" fill="${opts.subtitleColor}" font-family="${opts.fontFamily}" letter-spacing="${subtitleSpacing}" font-kerning="normal" text-rendering="geometricPrecision"`;
+
+  const subtitleLineH = Math.round(subtitleFontSize * SUBTITLE_LINE_HEIGHT);
 
   let textElements = '';
 
@@ -474,15 +484,16 @@ function buildDeviceTextSvg(
 
     if (subtitle) {
       y += Math.round(titleFontSize * 0.4) + subtitleFontSize;
-      textElements += `<text x="${cx}" y="${y}" ${subtitleAttrs}>${escapeXml(subtitle)}</text>`;
+      textElements += renderMultilineText(subtitleLines, cx, y, subtitleFontSize, SUBTITLE_LINE_HEIGHT, subtitleAttrs);
     }
   } else {
     const bottomPad = Math.round(canvasH * 0.086);
     let y = canvasH - bottomPad;
 
     if (subtitle) {
-      textElements += `<text x="${cx}" y="${y}" ${subtitleAttrs}>${escapeXml(subtitle)}</text>`;
-      y -= Math.round(subtitleFontSize * 1.8);
+      const subFirstLineY = y - (subtitleLines.length - 1) * subtitleLineH;
+      textElements += renderMultilineText(subtitleLines, cx, subFirstLineY, subtitleFontSize, SUBTITLE_LINE_HEIGHT, subtitleAttrs);
+      y = subFirstLineY - Math.round(subtitleFontSize * 1.8);
     }
 
     if (title) {
@@ -529,8 +540,8 @@ async function frameWithoutDevice(
   padX: number,
   topOffset: number,
   padY: number,
-  title: string | undefined,
-  subtitle: string | undefined,
+  titleLines: string[],
+  subtitleLines: string[],
   titleH: number,
   subtitleH: number,
   titleFontSize: number,
@@ -560,7 +571,7 @@ async function frameWithoutDevice(
     ? buildPatternSvg(canvasW, canvasH, opts.pattern, opts.patternColor, opts.patternOpacity)
     : null;
   const textSvg = hasOverlay
-    ? buildTextSvg(canvasW, padY, titleH, subtitleH, titleFontSize, subtitleFontSize, title, subtitle, opts)
+    ? buildTextSvg(canvasW, padY, titleH, subtitleH, titleFontSize, subtitleFontSize, titleLines, subtitleLines, opts)
     : null;
 
   let shadowBuf: Buffer | null = null;
@@ -675,26 +686,26 @@ function buildTextSvg(
   subtitleH: number,
   titleFontSize: number,
   subtitleFontSize: number,
-  title: string | undefined,
-  subtitle: string | undefined,
+  titleLines: string[],
+  subtitleLines: string[],
   opts: FrameOptions,
 ): string {
   const cx = Math.round(canvasW / 2);
 
   let textElements = '';
 
-  if (title) {
+  if (titleLines.length > 0) {
     const titleY = padY + Math.round(titleFontSize * 1.25);
     const ls = opts.titleSpacing * titleFontSize;
-    const lines = title.split('\\n');
     const titleAttrs = `text-anchor="middle" font-size="${titleFontSize}" font-weight="${opts.titleWeight}" fill="${opts.titleColor}" font-family="${opts.fontFamily}" letter-spacing="${ls}" font-kerning="normal" text-rendering="geometricPrecision"`;
-    textElements += renderMultilineText(lines, cx, titleY, titleFontSize, opts.titleLineHeight, titleAttrs);
+    textElements += renderMultilineText(titleLines, cx, titleY, titleFontSize, opts.titleLineHeight, titleAttrs);
   }
 
-  if (subtitle) {
+  if (subtitleLines.length > 0) {
     const subtitleY = padY + titleH + Math.round(subtitleFontSize * 1.4);
     const ls = opts.subtitleSpacing * subtitleFontSize;
-    textElements += `<text x="${cx}" y="${subtitleY}" text-anchor="middle" font-size="${subtitleFontSize}" font-weight="${opts.subtitleWeight}" fill="${opts.subtitleColor}" font-family="${opts.fontFamily}" letter-spacing="${ls}" font-kerning="normal" text-rendering="geometricPrecision">${escapeXml(subtitle)}</text>`;
+    const subtitleAttrs = `text-anchor="middle" font-size="${subtitleFontSize}" font-weight="${opts.subtitleWeight}" fill="${opts.subtitleColor}" font-family="${opts.fontFamily}" letter-spacing="${ls}" font-kerning="normal" text-rendering="geometricPrecision"`;
+    textElements += renderMultilineText(subtitleLines, cx, subtitleY, subtitleFontSize, SUBTITLE_LINE_HEIGHT, subtitleAttrs);
   }
 
   return `<svg width="${canvasW}" height="${padY + titleH + subtitleH}" xmlns="http://www.w3.org/2000/svg">
@@ -720,6 +731,16 @@ function escapeXml(str: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+// Split user-supplied text into lines. Accepts:
+//   - real newlines: "\n", "\r\n"   (config files, programmatic API, $'...' shells)
+//   - literal backslash-n: "\\n"    (default bash --title "Foo\nBar" passes 2 chars)
+//   - literal backslash-r-n: "\\r\\n"
+// Empty input yields [].
+export function splitLines(text: string): string[] {
+  if (!text) return [];
+  return text.split(/\r\n|\n|\\r\\n|\\n/);
 }
 
 // ─── Auto-fit helpers ──────────────────────────────────────
@@ -774,6 +795,6 @@ export function computeAutoFit(
     };
   }
 
-  // No wrapping needed — return original lines (split on literal \n from CLI)
-  return { lines: title.split('\\n'), fontSize };
+  // No wrapping needed — return original lines (split on user-supplied breaks)
+  return { lines: splitLines(title), fontSize };
 }
