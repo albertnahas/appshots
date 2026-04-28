@@ -12,7 +12,7 @@ program
   .description(
     'Generate App Store-ready screenshots. Capture, frame, and validate.'
   )
-  .version('1.2.1');
+  .version('1.3.0');
 
 program
   .command('frame <input>')
@@ -31,6 +31,17 @@ program
   .option('--pattern <name>', 'background pattern (dots, grid, diagonal, waves, diamonds, cross-dots)')
   .option('--pattern-opacity <ratio>', 'pattern opacity (0-1)')
   .option('--text-position <pos>', 'text position: top or bottom', 'bottom')
+  .option('--title-size <ratio>', 'title size as ratio of canvas width (0–0.2)')
+  .option('--subtitle-size <ratio>', 'subtitle size as ratio of canvas width (0–0.1)')
+  .option('--title-weight <weight>', 'title font-weight 100–900')
+  .option('--subtitle-weight <weight>', 'subtitle font-weight 100–900')
+  .option('--title-spacing <ratio>', 'title letter-spacing as ratio of font size')
+  .option('--subtitle-spacing <ratio>', 'subtitle letter-spacing as ratio of font size')
+  .option('--title-color <color>', 'title color (CSS color)')
+  .option('--subtitle-color <color>', 'subtitle color (CSS color)')
+  .option('--font-family <stack>', 'CSS font-family stack')
+  .option('--title-line-height <number>', 'title line-height')
+  .option('--auto-fit-title', 'shrink and wrap title to fit canvas width')
   .option('-c, --config <path>', 'config file path')
   .action(frameCommand);
 

@@ -1,6 +1,6 @@
 {
   "name": "appshots",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Generate App Store-ready screenshots from your web app. Capture, frame, and validate — all from the CLI.",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,8 +22,13 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:goldens": "vitest run tests/golden.test.ts",
+    "test:update-goldens": "UPDATE_GOLDENS=1 vitest run tests/golden.test.ts"
   },
   "keywords": [
     "app-store",
@@ -65,8 +70,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.5",
+    "pixelmatch": "^7.1.0",
     "tsup": "^8.4.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.5"
   },
   "engines": {
     "node": ">=18"
