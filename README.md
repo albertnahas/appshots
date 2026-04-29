@@ -217,6 +217,7 @@ Also supports `.js`, `.mjs`, and `.json` formats.
 | `--font-family <stack>` | CSS font-family stack | `'Inter', system-ui, …` |
 | `--title-line-height <number>` | Title line height | `1.15` |
 | `--auto-fit-title` | Shrink and word-wrap title to fit canvas width | — |
+| `--phone-scale <ratio>` | Phone width as ratio of canvas width (0.4–1.0) — overrides per-device default; only applies when device frame is rendered | per-device (`0.775` phones, `0.88` tablets) |
 | `-c, --config <path>` | Config file path | — |
 
 ### `appshots capture`

@@ -248,6 +248,9 @@ async function frameWithDevice(
   orientation: string,
 ): Promise<Buffer> {
   const fc = getFrameConfig(spec);
+  if (opts.phoneScale !== undefined) {
+    fc.phoneScale = opts.phoneScale;
+  }
   const { body: bodyColor, ring: ringColor } = resolveFrameColor(opts.frameColor);
 
   // Phone dimensions — proportional to canvas width

@@ -184,4 +184,21 @@ describe('golden: frameScreenshot renders', () => {
     });
     await compareToGolden(result, 'results-custom-typo.png');
   });
+
+  // ── 9. phoneScale override (Issue #1) ─────────────────────────────────────
+  // Covers: --phone-scale flag bumping iPhone framing from default 0.775 to 0.9
+  // (matches the iPad rhythm the issue describes — tighter empty gradient strip)
+  it('device frame · phoneScale override', async () => {
+    const result = await frameScreenshot({
+      input: join(RAW_DIR, 'dish-details.png'),
+      device: 'iphone-6.9',
+      title: 'Dish Details',
+      subtitle: 'Powered by AI',
+      options: {
+        background: 'linear-gradient(180deg, #1a1a2e, #16213e)',
+        phoneScale: 0.9,
+      },
+    });
+    await compareToGolden(result, 'dish-details-phonescale-0.9.png');
+  });
 });

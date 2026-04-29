@@ -42,6 +42,7 @@ program
   .option('--font-family <stack>', 'CSS font-family stack')
   .option('--title-line-height <number>', 'title line-height')
   .option('--auto-fit-title', 'shrink and wrap title to fit canvas width')
+  .option('--phone-scale <ratio>', 'phone width as ratio of canvas width (0.4–1.0)')
   .option('-c, --config <path>', 'config file path')
   .action(frameCommand);
 
