@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { firstFamily } from '../src/core/fonts.js';
-import { estimateTextWidth, computeAutoFit, splitLines } from '../src/core/framer.js';
+import { estimateTextWidth, computeAutoFit, splitLines, frameScreenshot } from '../src/core/framer.js';
 import { frameOptionsSchema } from '../src/types.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const RAW_DIR = join(__dirname, '../examples/raw');
 
 // ─── firstFamily ──────────────────────────────────────────
 
@@ -200,5 +205,57 @@ describe('frameOptionsSchema defaults', () => {
     expect(custom.titleSpacing).toBeCloseTo(0.02);
     expect(custom.fontFamily).toBe('SF Pro Display, sans-serif');
     expect(custom.autoFitTitle).toBe(true);
+  });
+});
+
+// ─── phoneScale option ───────────────────────────────────
+
+describe('frameOptionsSchema.phoneScale', () => {
+  it('is undefined by default (so framer falls back to per-device value)', () => {
+    const opts = frameOptionsSchema.parse({});
+    expect(opts.phoneScale).toBeUndefined();
+  });
+
+  it('accepts a value within bounds', () => {
+    const opts = frameOptionsSchema.parse({ phoneScale: 0.86 });
+    expect(opts.phoneScale).toBe(0.86);
+  });
+
+  it('rejects values below 0.4', () => {
+    expect(() => frameOptionsSchema.parse({ phoneScale: 0.3 })).toThrow();
+  });
+
+  it('rejects values above 1.0', () => {
+    expect(() => frameOptionsSchema.parse({ phoneScale: 1.5 })).toThrow();
+  });
+});
+
+describe('frameScreenshot · phoneScale override', () => {
+  it('produces a different image when phoneScale is overridden', async () => {
+    const baseline = await frameScreenshot({
+      input: join(RAW_DIR, 'dish-details.png'),
+      device: 'iphone-6.9',
+      options: { background: '#1a1a2e', shadow: false },
+    });
+    const tighter = await frameScreenshot({
+      input: join(RAW_DIR, 'dish-details.png'),
+      device: 'iphone-6.9',
+      options: { background: '#1a1a2e', shadow: false, phoneScale: 0.9 },
+    });
+    expect(tighter.equals(baseline)).toBe(false);
+  });
+
+  it('matches baseline when phoneScale equals the device default (0.775 for modern iPhone)', async () => {
+    const baseline = await frameScreenshot({
+      input: join(RAW_DIR, 'dish-details.png'),
+      device: 'iphone-6.9',
+      options: { background: '#1a1a2e', shadow: false },
+    });
+    const explicit = await frameScreenshot({
+      input: join(RAW_DIR, 'dish-details.png'),
+      device: 'iphone-6.9',
+      options: { background: '#1a1a2e', shadow: false, phoneScale: 0.775 },
+    });
+    expect(explicit.equals(baseline)).toBe(true);
   });
 });

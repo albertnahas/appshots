@@ -37,6 +37,7 @@ interface FrameCommandOptions {
   fontFamily?: string;
   titleLineHeight?: string;
   autoFitTitle?: boolean;
+  phoneScale?: string;
 }
 
 export async function frameCommand(
@@ -86,6 +87,7 @@ export async function frameCommand(
     ...(opts.fontFamily && { fontFamily: opts.fontFamily }),
     ...(opts.titleLineHeight && { titleLineHeight: parseFloat(opts.titleLineHeight) }),
     ...(opts.autoFitTitle && { autoFitTitle: opts.autoFitTitle }),
+    ...(opts.phoneScale && { phoneScale: parseFloat(opts.phoneScale) }),
   };
 
   // Get per-screen titles from config

@@ -56,6 +56,7 @@ export const frameOptionsSchema = z.object({
   pattern: z.string().optional(),
   patternOpacity: z.number().min(0).max(1).default(0.1),
   patternColor: z.string().default('#ffffff'),
+  phoneScale: z.number().min(0.4).max(1.0).optional(),
 });
 
 export type FrameOptions = z.infer<typeof frameOptionsSchema>;
