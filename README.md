@@ -76,6 +76,18 @@ appshots frame ./screenshots --device iphone-6.9 \
 appshots frame ./screenshots --device iphone-6.9 \
   --background "#1a1a2e" --pattern dots --title "Dashboard"
 
+# Custom typography — lighter weight, larger size, auto-fit long titles
+appshots frame ./screenshots --device iphone-6.9 \
+  --background "linear-gradient(180deg, #1a1a2e, #16213e)" \
+  --title "Complete Operation History" \
+  --title-weight 700 --title-size 0.075 --auto-fit-title \
+  --text-position top
+
+# Multi-line title (use literal \n in the shell)
+appshots frame ./screenshots --device iphone-6.9 \
+  --background "#0f3460" \
+  --title "Track Your\nProgress"
+
 # Process a single file
 appshots frame home.png --device iphone-6.9 -o ./store-ready
 ```
@@ -134,6 +146,14 @@ export default defineConfig({
     borderRadius: 0.04,
     titleColor: '#ffffff',
     subtitleColor: 'rgba(255,255,255,0.7)',
+    titleSize: 0.075,
+    subtitleSize: 0.043,
+    titleWeight: 700,
+    subtitleWeight: 500,
+    titleSpacing: 0,
+    titleLineHeight: 1.15,
+    fontFamily: "'Inter', system-ui, sans-serif",
+    autoFitTitle: true,
     shadow: true,
     frameColor: 'black',
     textPosition: 'bottom',
@@ -186,6 +206,18 @@ Also supports `.js`, `.mjs`, and `.json` formats.
 | `--pattern <name>` | Background pattern: `dots`, `grid`, `diagonal`, `waves`, `diamonds`, `cross-dots` | — |
 | `--pattern-opacity <ratio>` | Pattern opacity (0–1) | `0.1` |
 | `--text-position <pos>` | Text position: `top` or `bottom` | `bottom` |
+| `--title-size <ratio>` | Title font size as ratio of canvas width (0–0.2) | `0.087` |
+| `--subtitle-size <ratio>` | Subtitle font size as ratio of canvas width (0–0.1) | `0.043` |
+| `--title-weight <weight>` | Title font weight (100–900) | `800` |
+| `--subtitle-weight <weight>` | Subtitle font weight (100–900) | `500` |
+| `--title-spacing <ratio>` | Title letter-spacing as ratio of font size | `0` |
+| `--subtitle-spacing <ratio>` | Subtitle letter-spacing as ratio of font size | `0` |
+| `--title-color <color>` | Title text color (CSS color) | `#ffffff` |
+| `--subtitle-color <color>` | Subtitle text color (CSS color) | `rgba(255,255,255,0.7)` |
+| `--font-family <stack>` | CSS font-family stack | `'Inter', system-ui, …` |
+| `--title-line-height <number>` | Title line height | `1.15` |
+| `--auto-fit-title` | Shrink and word-wrap title to fit canvas width | — |
+| `--phone-scale <ratio>` | Phone width as ratio of canvas width (0.4–1.0) — overrides per-device default; only applies when device frame is rendered | per-device (`0.775` phones, `0.88` tablets) |
 | `-c, --config <path>` | Config file path | — |
 
 ### `appshots capture`
@@ -209,6 +241,46 @@ Checks: dimensions, format (PNG/JPEG), transparency, file size (< 10 MB), color 
 |--------|-------------|
 | `--platform <name>` | Filter by platform (`ios`, `android`, `macos`, `watchos`, `tvos`, `visionos`) |
 | `--category <name>` | Filter by category (`phone`, `tablet`, `desktop`, `watch`, `tv`, `headset`) |
+
+## Typography
+
+### Multi-line titles and subtitles
+
+Pass a literal `\n` (backslash-n) in either title or subtitle to force a line break:
+
+```bash
+appshots frame screenshot.png --device iphone-6.9 \
+  --title "Scan Your\nProgress" \
+  --subtitle "Photo, URL,\nor PDF"
+```
+
+In a shell script, use double quotes — bash passes `\n` as two characters (backslash + n) rather than a newline, which is exactly what appshots expects. From a config file or programmatic API, real `\n` newlines work too.
+
+The layout adjusts automatically: subtitle lines flow downward in `--text-position top` and upward in `--text-position bottom`, and the device frame is repositioned so nothing gets clipped.
+
+### Auto-fit
+
+`--auto-fit-title` prevents captions from overflowing the canvas when titles are long:
+
+1. Estimates the rendered width using a per-character heuristic calibrated to the current font weight
+2. Shrinks `--title-size` in 0.005 steps until the title fits within the padded canvas area
+3. If it still overflows at the minimum size (0.04), splits on the nearest balanced word boundary
+
+```bash
+appshots frame screenshot.png --device iphone-6.9 \
+  --title "Complete Operation History" \
+  --title-size 0.075 --title-weight 700 --auto-fit-title
+```
+
+### Font requirements
+
+appshots renders text via SVG, so the font must be installed on the host system. The default stack tries `Inter` first, then falls back to `system-ui` and platform fonts. To use a specific font:
+
+```bash
+appshots frame screenshot.png --font-family "'SF Pro Display', sans-serif"
+```
+
+If the requested font isn't installed, appshots warns once per batch (or throws if you passed `--font-family` explicitly). Install [Inter](https://rsms.me/inter/) for the sharpest results at the default settings.
 
 ## Device Presets
 
@@ -240,7 +312,12 @@ const buffer = await frameScreenshot({
   input: './screenshot.png',
   device: 'iphone-6.9',
   title: 'Welcome',
-  options: { background: 'linear-gradient(135deg, #667eea, #764ba2)' },
+  options: {
+    background: 'linear-gradient(135deg, #667eea, #764ba2)',
+    titleWeight: 700,
+    titleSize: 0.075,
+    autoFitTitle: true,
+  },
 });
 
 // Get device specs

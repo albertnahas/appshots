@@ -1,6 +1,11 @@
 import sharp from 'sharp';
 import { getDevice } from '../devices.js';
 import { frameOptionsSchema, type FrameOptions, type DeviceSpec } from '../types.js';
+import { checkFont, firstFamily } from './fonts.js';
+
+const warnedFonts = new Set<string>();
+
+const SUBTITLE_LINE_HEIGHT = 1.3;
 
 interface FrameInput {
   /** Path to the raw screenshot */
@@ -155,6 +160,22 @@ export async function frameScreenshot(params: FrameInput): Promise<Buffer> {
   const { input, device, title, subtitle, orientation = 'portrait' } = params;
   const opts = frameOptionsSchema.parse(params.options ?? {});
 
+  // Phase 4: font availability check
+  const fontExplicit = params.options?.fontFamily !== undefined;
+  const family = firstFamily(opts.fontFamily);
+  const fontCheck = checkFont(family);
+  if (fontCheck !== null && !fontCheck.available) {
+    if (fontExplicit) {
+      throw new Error(
+        `Font '${family}' is not installed. fc-match resolved to '${fontCheck.matched}'.\n` +
+        `Install the font, or pass --font-family with an available stack.`
+      );
+    } else if (!warnedFonts.has(family)) {
+      warnedFonts.add(family);
+      console.warn(`[appshots] Warning: font '${family}' not found; falling back to '${fontCheck.matched}'.`);
+    }
+  }
+
   const spec = getDevice(device);
   if (!spec) throw new Error(`Unknown device: ${device}`);
 
@@ -182,17 +203,34 @@ export async function frameScreenshot(params: FrameInput): Promise<Buffer> {
   // Non-device-frame path — existing layout
   const padX = Math.round(canvasW * opts.padding);
   const padY = Math.round(canvasH * opts.padding * 0.6);
-  const titleFontSize = Math.round(canvasW * opts.titleSize);
+  const baseTitleFontSize = Math.round(canvasW * opts.titleSize);
   const subtitleFontSize = Math.round(canvasW * opts.subtitleSize);
-  const titleH = title ? Math.round(titleFontSize * 2) : 0;
-  const subtitleH = subtitle ? Math.round(subtitleFontSize * 2.4) : 0;
+
+  // Phase 3a+3b: auto-fit and multi-line-aware title height
+  let effectiveTitleFontSize = baseTitleFontSize;
+  let titleLines = title ? splitLines(title) : [];
+  if (title && opts.autoFitTitle) {
+    const fit = computeAutoFit(title, canvasW, opts, baseTitleFontSize);
+    effectiveTitleFontSize = fit.fontSize;
+    titleLines = fit.lines;
+  }
+  const subtitleLines = subtitle ? splitLines(subtitle) : [];
+  const titleH = title
+    ? Math.round(titleLines.length * effectiveTitleFontSize * opts.titleLineHeight + effectiveTitleFontSize * 0.5)
+    : 0;
+  const subtitleH = subtitle
+    ? Math.round(
+        (subtitleLines.length - 1) * subtitleFontSize * SUBTITLE_LINE_HEIGHT +
+        subtitleFontSize * 2.4,
+      )
+    : 0;
   const topOffset = padY + titleH + subtitleH;
   const areaW = canvasW - padX * 2;
   const areaH = canvasH - topOffset - padY;
 
   return frameWithoutDevice(
     input, opts, canvasW, canvasH, areaW, areaH, padX, topOffset, padY,
-    title, subtitle, titleH, subtitleH, titleFontSize, subtitleFontSize, hasOverlay,
+    titleLines, subtitleLines, titleH, subtitleH, effectiveTitleFontSize, subtitleFontSize, hasOverlay,
   );
 }
 
@@ -210,6 +248,9 @@ async function frameWithDevice(
   orientation: string,
 ): Promise<Buffer> {
   const fc = getFrameConfig(spec);
+  if (opts.phoneScale !== undefined) {
+    fc.phoneScale = opts.phoneScale;
+  }
   const { body: bodyColor, ring: ringColor } = resolveFrameColor(opts.frameColor);
 
   // Phone dimensions — proportional to canvas width
@@ -414,13 +455,23 @@ function buildDeviceTextSvg(
   opts: FrameOptions,
 ): string {
   const cx = Math.round(canvasW / 2);
-  const font = `'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
-  const titleFontSize = Math.round(canvasW * opts.titleSize);
+  let titleFontSize = Math.round(canvasW * opts.titleSize);
   const subtitleFontSize = Math.round(canvasW * opts.subtitleSize);
-  const titleSpacing = Math.max(1, Math.round(titleFontSize * 0.08));
-  const titleAttrs = `text-anchor="middle" font-size="${titleFontSize}" font-weight="800" fill="${opts.titleColor}" font-family="${font}" letter-spacing="${titleSpacing}"`;
-  const subtitleSpacing = Math.max(1, Math.round(subtitleFontSize * 0.01));
-  const subtitleAttrs = `text-anchor="middle" font-size="${subtitleFontSize}" font-weight="500" fill="${opts.subtitleColor}" font-family="${font}" letter-spacing="${subtitleSpacing}"`;
+
+  let titleLines = title ? splitLines(title) : [];
+  if (title && opts.autoFitTitle) {
+    const fit = computeAutoFit(title, canvasW, opts, titleFontSize);
+    titleFontSize = fit.fontSize;
+    titleLines = fit.lines;
+  }
+  const subtitleLines = subtitle ? splitLines(subtitle) : [];
+
+  const titleSpacing = opts.titleSpacing * titleFontSize;
+  const subtitleSpacing = opts.subtitleSpacing * subtitleFontSize;
+  const titleAttrs = `text-anchor="middle" font-size="${titleFontSize}" font-weight="${opts.titleWeight}" fill="${opts.titleColor}" font-family="${opts.fontFamily}" letter-spacing="${titleSpacing}" font-kerning="normal" text-rendering="geometricPrecision"`;
+  const subtitleAttrs = `text-anchor="middle" font-size="${subtitleFontSize}" font-weight="${opts.subtitleWeight}" fill="${opts.subtitleColor}" font-family="${opts.fontFamily}" letter-spacing="${subtitleSpacing}" font-kerning="normal" text-rendering="geometricPrecision"`;
+
+  const subtitleLineH = Math.round(subtitleFontSize * SUBTITLE_LINE_HEIGHT);
 
   let textElements = '';
 
@@ -429,30 +480,29 @@ function buildDeviceTextSvg(
     let y = topPad;
 
     if (title) {
-      const lines = title.split('\\n');
-      y += Math.round(titleFontSize * 1.15);
-      textElements += renderMultilineText(lines, cx, y, titleFontSize, 1.15, titleAttrs);
-      y += (lines.length - 1) * Math.round(titleFontSize * 1.15);
+      y += Math.round(titleFontSize * opts.titleLineHeight);
+      textElements += renderMultilineText(titleLines, cx, y, titleFontSize, opts.titleLineHeight, titleAttrs);
+      y += (titleLines.length - 1) * Math.round(titleFontSize * opts.titleLineHeight);
     }
 
     if (subtitle) {
       y += Math.round(titleFontSize * 0.4) + subtitleFontSize;
-      textElements += `<text x="${cx}" y="${y}" ${subtitleAttrs}>${escapeXml(subtitle)}</text>`;
+      textElements += renderMultilineText(subtitleLines, cx, y, subtitleFontSize, SUBTITLE_LINE_HEIGHT, subtitleAttrs);
     }
   } else {
     const bottomPad = Math.round(canvasH * 0.086);
     let y = canvasH - bottomPad;
 
     if (subtitle) {
-      textElements += `<text x="${cx}" y="${y}" ${subtitleAttrs}>${escapeXml(subtitle)}</text>`;
-      y -= Math.round(subtitleFontSize * 1.8);
+      const subFirstLineY = y - (subtitleLines.length - 1) * subtitleLineH;
+      textElements += renderMultilineText(subtitleLines, cx, subFirstLineY, subtitleFontSize, SUBTITLE_LINE_HEIGHT, subtitleAttrs);
+      y = subFirstLineY - Math.round(subtitleFontSize * 1.8);
     }
 
     if (title) {
-      const lines = title.split('\\n');
-      const lineH = Math.round(titleFontSize * 1.15);
-      const firstLineY = y - (lines.length - 1) * lineH;
-      textElements += renderMultilineText(lines, cx, firstLineY, titleFontSize, 1.15, titleAttrs);
+      const lineH = Math.round(titleFontSize * opts.titleLineHeight);
+      const firstLineY = y - (titleLines.length - 1) * lineH;
+      textElements += renderMultilineText(titleLines, cx, firstLineY, titleFontSize, opts.titleLineHeight, titleAttrs);
     }
   }
 
@@ -493,8 +543,8 @@ async function frameWithoutDevice(
   padX: number,
   topOffset: number,
   padY: number,
-  title: string | undefined,
-  subtitle: string | undefined,
+  titleLines: string[],
+  subtitleLines: string[],
   titleH: number,
   subtitleH: number,
   titleFontSize: number,
@@ -524,7 +574,7 @@ async function frameWithoutDevice(
     ? buildPatternSvg(canvasW, canvasH, opts.pattern, opts.patternColor, opts.patternOpacity)
     : null;
   const textSvg = hasOverlay
-    ? buildTextSvg(canvasW, padY, titleH, subtitleH, titleFontSize, subtitleFontSize, title, subtitle, opts)
+    ? buildTextSvg(canvasW, padY, titleH, subtitleH, titleFontSize, subtitleFontSize, titleLines, subtitleLines, opts)
     : null;
 
   let shadowBuf: Buffer | null = null;
@@ -639,28 +689,26 @@ function buildTextSvg(
   subtitleH: number,
   titleFontSize: number,
   subtitleFontSize: number,
-  title: string | undefined,
-  subtitle: string | undefined,
+  titleLines: string[],
+  subtitleLines: string[],
   opts: FrameOptions,
 ): string {
   const cx = Math.round(canvasW / 2);
-  const font = `system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
 
   let textElements = '';
 
-  if (title) {
+  if (titleLines.length > 0) {
     const titleY = padY + Math.round(titleFontSize * 1.25);
-    const ls = Math.max(1, Math.round(titleFontSize * 0.08));
-    textElements += `<text x="${cx}" y="${titleY}" text-anchor="middle"
-      font-size="${titleFontSize}" font-weight="800" fill="${opts.titleColor}"
-      font-family="${font}" letter-spacing="${ls}">${escapeXml(title)}</text>`;
+    const ls = opts.titleSpacing * titleFontSize;
+    const titleAttrs = `text-anchor="middle" font-size="${titleFontSize}" font-weight="${opts.titleWeight}" fill="${opts.titleColor}" font-family="${opts.fontFamily}" letter-spacing="${ls}" font-kerning="normal" text-rendering="geometricPrecision"`;
+    textElements += renderMultilineText(titleLines, cx, titleY, titleFontSize, opts.titleLineHeight, titleAttrs);
   }
 
-  if (subtitle) {
+  if (subtitleLines.length > 0) {
     const subtitleY = padY + titleH + Math.round(subtitleFontSize * 1.4);
-    textElements += `<text x="${cx}" y="${subtitleY}" text-anchor="middle"
-      font-size="${subtitleFontSize}" font-weight="500" fill="${opts.subtitleColor}"
-      font-family="${font}">${escapeXml(subtitle)}</text>`;
+    const ls = opts.subtitleSpacing * subtitleFontSize;
+    const subtitleAttrs = `text-anchor="middle" font-size="${subtitleFontSize}" font-weight="${opts.subtitleWeight}" fill="${opts.subtitleColor}" font-family="${opts.fontFamily}" letter-spacing="${ls}" font-kerning="normal" text-rendering="geometricPrecision"`;
+    textElements += renderMultilineText(subtitleLines, cx, subtitleY, subtitleFontSize, SUBTITLE_LINE_HEIGHT, subtitleAttrs);
   }
 
   return `<svg width="${canvasW}" height="${padY + titleH + subtitleH}" xmlns="http://www.w3.org/2000/svg">
@@ -686,4 +734,70 @@ function escapeXml(str: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+// Split user-supplied text into lines. Accepts:
+//   - real newlines: "\n", "\r\n"   (config files, programmatic API, $'...' shells)
+//   - literal backslash-n: "\\n"    (default bash --title "Foo\nBar" passes 2 chars)
+//   - literal backslash-r-n: "\\r\\n"
+// Empty input yields [].
+export function splitLines(text: string): string[] {
+  if (!text) return [];
+  return text.split(/\r\n|\n|\\r\\n|\\n/);
+}
+
+// ─── Auto-fit helpers ──────────────────────────────────────
+
+export function estimateTextWidth(text: string, fontSize: number, weight: number): number {
+  // Linear interpolation of avg char width ratio: weight 400 → 0.50, weight 800 → 0.55
+  const avgCharRatio = 0.50 + (weight - 400) * (0.05 / 400);
+  return text.length * fontSize * avgCharRatio;
+}
+
+export function computeAutoFit(
+  title: string,
+  canvasW: number,
+  opts: FrameOptions,
+  titleFontSize: number,
+): { lines: string[]; fontSize: number } {
+  const availW = canvasW * (1 - 2 * opts.padding) * 0.95;
+  const step = Math.max(1, Math.round(canvasW * 0.005));
+  const floorSize = Math.round(canvasW * 0.04);
+
+  let fontSize = titleFontSize;
+
+  // Shrink font until it fits or hits the floor
+  while (fontSize > floorSize && estimateTextWidth(title, fontSize, opts.titleWeight) > availW) {
+    fontSize = Math.max(floorSize, fontSize - step);
+  }
+
+  // If still too wide at floor, try word wrap
+  const words = title.split(' ');
+  if (words.length > 1 && estimateTextWidth(title, fontSize, opts.titleWeight) > availW) {
+    let bestSplit = Math.ceil(words.length / 2);
+    let bestDiff = Infinity;
+    let foundValid = false;
+    for (let i = 1; i < words.length; i++) {
+      const line1 = words.slice(0, i).join(' ');
+      const line2 = words.slice(i).join(' ');
+      if (
+        estimateTextWidth(line1, fontSize, opts.titleWeight) <= availW &&
+        estimateTextWidth(line2, fontSize, opts.titleWeight) <= availW
+      ) {
+        const diff = Math.abs(line1.length - line2.length);
+        if (!foundValid || diff < bestDiff) {
+          bestDiff = diff;
+          bestSplit = i;
+          foundValid = true;
+        }
+      }
+    }
+    return {
+      lines: [words.slice(0, bestSplit).join(' '), words.slice(bestSplit).join(' ')],
+      fontSize,
+    };
+  }
+
+  // No wrapping needed — return original lines (split on user-supplied breaks)
+  return { lines: splitLines(title), fontSize };
 }

@@ -42,6 +42,13 @@ export const frameOptionsSchema = z.object({
   subtitleColor: z.string().default('rgba(255,255,255,0.7)'),
   titleSize: z.number().min(0).max(0.2).default(0.087),
   subtitleSize: z.number().min(0).max(0.1).default(0.043),
+  titleWeight: z.number().min(100).max(900).default(800),
+  subtitleWeight: z.number().min(100).max(900).default(500),
+  titleSpacing: z.number().default(0),
+  subtitleSpacing: z.number().default(0),
+  fontFamily: z.string().default(`'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`),
+  titleLineHeight: z.number().default(1.15),
+  autoFitTitle: z.boolean().default(false),
   shadow: z.boolean().default(true),
   deviceFrame: z.boolean().default(true),
   frameColor: z.string().default('black'),
@@ -49,6 +56,7 @@ export const frameOptionsSchema = z.object({
   pattern: z.string().optional(),
   patternOpacity: z.number().min(0).max(1).default(0.1),
   patternColor: z.string().default('#ffffff'),
+  phoneScale: z.number().min(0.4).max(1.0).optional(),
 });
 
 export type FrameOptions = z.infer<typeof frameOptionsSchema>;
